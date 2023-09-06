@@ -89,9 +89,10 @@ class TelaLogin(QWidget):
         self.botao_login = QPushButton('Login', self)
         self.botao_cancelar = QPushButton('X', self)
 
+        #Campo input_senha é um campo de senha  
         self.input_senha.setEchoMode(QLineEdit.Password)
 
-        # Set positions for each widget
+        # Posicionar os widgets na tela
         self.label_usuario.setGeometry(300, 200, 100, 30)  # X, Y, Width, Height
         self.input_usuario.setGeometry(300, 230, 200, 30)
         self.label_senha.setGeometry(300, 270, 100, 30)
@@ -99,7 +100,7 @@ class TelaLogin(QWidget):
         self.botao_login.setGeometry(350, 350, 100, 30)
         self.botao_cancelar.setGeometry(750, 10, 40, 30)
 
-        # Configure events
+        # Configurar os eventos dos botões
         self.botao_login.clicked.connect(self.fazer_login)
         self.botao_cancelar.clicked.connect(self.close)
 
@@ -110,7 +111,7 @@ class TelaLogin(QWidget):
         usuario = self.input_usuario.text()
         senha = self.input_senha.text()
 
-        # Substitua esta parte com a lógica de autenticação real
+        # Autenticação porca só pra testar
         if usuario == 'usuario' and senha == 'senha':
             print('Login bem-sucedido')
             # Abra a tela principal após o login bem-sucedido
