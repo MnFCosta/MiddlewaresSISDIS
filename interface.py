@@ -111,7 +111,7 @@ class TelaLogin(QWidget):
         usuario = self.input_usuario.text()
         senha = self.input_senha.text()
 
-        # Autenticação porca só pra testar
+        # Autenticação tosca só pra testar
         if usuario == 'usuario' and senha == 'senha':
             print('Login bem-sucedido')
             # Abra a tela principal após o login bem-sucedido
