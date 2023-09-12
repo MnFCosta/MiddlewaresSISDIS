@@ -1,34 +1,146 @@
 import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout
+from PyQt5.QtCore import QThread, pyqtSignal
+from confluent_kafka import Producer, Consumer, KafkaError
+import uuid
 
-grupos = {'1': "Grupo Brabíssimo",
-          '2': "Grupo dos Amigos",
+grupos = {'1': "mensagens_topic",
 }
 
+# Configurações do produtor Kafka
+config = {
+    'bootstrap.servers': 'localhost:9092',  # Endereço do servidor Kafka
+}
+
+id_grupo_kafka = f'teste-{str(uuid.uuid4())}'
+# Configurações do consumidor Kafka
+config_consumidor = {
+    'bootstrap.servers': 'localhost:9092',  # Kafka Broker
+    'group.id': id_grupo_kafka,  # Unique Consumer Group ID for each run
+    'auto.offset.reset': 'earliest',  # Start from the beginning of the topic
+    'isolation.level': 'read_committed',
+}
+
+
 class TelaGrupo(QWidget):
-    def __init__(self,grupo):
+    def __init__(self, grupo):
         super().__init__()
         self.grupo = grupo
+        self.historico_mensagens = [] 
+
+        self.historico_mensagens = self.msgs()
 
         self.initUI()
+
+    
+    def msgs(self):
+        mensagens = []
+
+        id_grupo_kafka = f'teste-{str(uuid.uuid4())}'
+        # Configurações do consumidor Kafka
+        config_consumidor = {
+            'bootstrap.servers': 'localhost:9092',  # Kafka Broker
+            'group.id': id_grupo_kafka,  # Id de grupo do consumidor
+            'auto.offset.reset': 'earliest',  # Inicie a consumir mensagens do inicio do topico
+            'isolation.level': 'read_committed',
+        }
+
+        consumer = Consumer(config_consumidor)
+        consumer.subscribe([self.grupo])
+        try:
+            while True:
+                msg = consumer.poll(1.0)  
+
+                if msg is None:
+                    # Se não houver mais mensagens sendo consumidas, encerre o loop
+                    break
+
+                if msg.error():
+                    print(f'Erro ao buscar por mensagens: {msg.error()}')
+                else:
+                    mensagem = msg.value().decode("utf-8")
+                    mensagens.append(mensagem)
+
+        except KeyboardInterrupt:
+            pass
+        finally:
+            return mensagens
 
     def initUI(self):
         # Widgets
         self.label_grupo = QLabel(f'Bem Vindo ao grupo {self.grupo}')
+        self.mensagens = QLabel('Mensagens:', self)
+        self.mensagens_grupo = QLabel(self, text='\n'.join(self.historico_mensagens))
+        self.mensagem = QLineEdit()
+        self.botao_mandar = QPushButton('Enviar')
         self.botao_cancelar = QPushButton('Cancelar')
 
         # Configurar layout
         layout = QVBoxLayout()
         layout.addWidget(self.label_grupo)
+        layout.addWidget(self.mensagens)
+        layout.addWidget(self.mensagens_grupo)
+        layout.addWidget(self.mensagem)
+        layout.addWidget(self.botao_mandar)
         layout.addWidget(self.botao_cancelar)
 
         self.setLayout(layout)
 
         # Configurar eventos
         self.botao_cancelar.clicked.connect(self.close)
+        self.botao_mandar.clicked.connect(self.mandar_mensagem)
 
         self.setWindowTitle('Tela de Grupo')
         self.setGeometry(100, 100, 300, 200)
+
+        # Configurar o consumidor Kafka em uma thread separada
+        self.consumer_thread = KafkaConsumerThread(grupo=self.grupo)
+        self.consumer_thread.start()
+
+        self.consumer_thread.message_received.connect(self.atualizar_mensagens)
+    
+    def atualizar_mensagens(self, mensagem):
+
+        texto = self.mensagens_grupo.text()
+        novo_texto = f"{texto}\n{mensagem}"
+        self.mensagens_grupo.setText(novo_texto)
+
+    def mandar_mensagem(self):
+        topico = self.grupo
+        mensagem = self.mensagem.text()
+
+        producer = Producer(config)
+        producer.produce(topico, key=None, value=mensagem)
+        producer.flush()
+
+        self.mensagem.clear()
+
+
+class KafkaConsumerThread(QThread):
+    message_received = pyqtSignal(str)
+
+    def __init__(self, grupo, parent=None,):
+        super().__init__(parent)
+        self.grupo = grupo
+
+    def run(self):
+        consumer = Consumer(config_consumidor)
+        consumer.subscribe([self.grupo])
+
+        while True:
+            msg = consumer.poll(1.0)
+
+            if msg is None:
+                continue
+
+            if msg.error():
+                if msg.error().code() == KafkaError._PARTITION_EOF:
+                    continue
+                else:
+                    print('Erro no Kafka: {}'.format(msg.error()))
+
+            message = msg.value().decode('utf-8')  # Decodifica os bytes para uma string
+            self.message_received.emit(message)
 
 
 class TelaPrincipal(QWidget):
