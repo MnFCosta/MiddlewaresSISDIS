@@ -7,12 +7,19 @@ import uuid
 grupos = {'1': "mensagens_topic",
 }
 
+usuarios = {
+    '1': ['manoel', 'senha123'],
+    '2': ['pedro', 'senha456'],
+}
+
+
 # Configurações do produtor Kafka
 config = {
     'bootstrap.servers': 'localhost:9092',  # Endereço do servidor Kafka
 }
 
 id_grupo_kafka = f'teste-{str(uuid.uuid4())}'
+
 # Configurações do consumidor Kafka
 config_consumidor = {
     'bootstrap.servers': 'localhost:9092',  # Kafka Broker
@@ -23,9 +30,10 @@ config_consumidor = {
 
 
 class TelaGrupo(QWidget):
-    def __init__(self, grupo):
+    def __init__(self, grupo, usuario_logado):
         super().__init__()
         self.grupo = grupo
+        self.usuario_logado = usuario_logado
         self.historico_mensagens = [] 
 
         self.historico_mensagens = self.msgs()
@@ -68,7 +76,7 @@ class TelaGrupo(QWidget):
 
     def initUI(self):
         # Widgets
-        self.label_grupo = QLabel(f'Bem Vindo ao grupo {self.grupo}')
+        self.label_grupo = QLabel(f'Bem Vindo ao grupo {self.grupo} {self.usuario_logado}!')
         self.mensagens = QLabel('Mensagens:', self)
         self.mensagens_grupo = QLabel(self, text='\n'.join(self.historico_mensagens))
         self.mensagem = QLineEdit()
@@ -107,7 +115,7 @@ class TelaGrupo(QWidget):
 
     def mandar_mensagem(self):
         topico = self.grupo
-        mensagem = self.mensagem.text()
+        mensagem = f'{self.usuario_logado}: {self.mensagem.text()}'
 
         producer = Producer(config)
         producer.produce(topico, key=None, value=mensagem)
@@ -144,8 +152,9 @@ class KafkaConsumerThread(QThread):
 
 
 class TelaPrincipal(QWidget):
-    def __init__(self):
+    def __init__(self, usuario_logado):
         super().__init__()
+        self.usuario_logado = usuario_logado
 
         self.initUI()
 
@@ -176,19 +185,19 @@ class TelaPrincipal(QWidget):
     def entrar_grupo(self):
         grupo = self.input_grupo.text()
 
-
         self.abrir_tela_grupo(grupos[f"{grupo}"])
 
         
     def abrir_tela_grupo(self, grupo):
-        self.tela_grupo = TelaGrupo(grupo)
+        self.tela_grupo = TelaGrupo(grupo, self.usuario_logado)
         self.tela_grupo.show()
         self.close()
 
 
 class TelaLogin(QWidget):
-    def __init__(self):
+    def __init__(self,):
         super().__init__()
+        self.usuario_logado = ''
 
         self.initUI()
 
@@ -223,16 +232,17 @@ class TelaLogin(QWidget):
         usuario = self.input_usuario.text()
         senha = self.input_senha.text()
 
-        # Autenticação tosca só pra testar
-        if usuario == 'usuario' and senha == 'senha':
-            print('Login bem-sucedido')
-            # Abra a tela principal após o login bem-sucedido
-            self.abrir_tela_principal()
-        else:
-            print('Login falhou')
+        for key, values in usuarios.items():
+
+            if usuario == values[0] and senha == values[1]:
+                self.usuario_logado = values[0]
+                print(f'Login bem-sucedido, seja bem vindo {self.usuario_logado}!')
+                self.abrir_tela_principal()
+            else:
+                print('Login falhou')
 
     def abrir_tela_principal(self):
-        self.tela_principal = TelaPrincipal()
+        self.tela_principal = TelaPrincipal(self.usuario_logado)
         self.tela_principal.show()
         self.close()
 
