@@ -2,14 +2,30 @@ import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout
 from PyQt5.QtCore import QThread, pyqtSignal
 from confluent_kafka import Producer, Consumer, KafkaError
+from confluent_kafka.admin import AdminClient
 import uuid
 
-grupos = {'1': "mensagens_topic",
-}
 
 usuarios = {
     '1': ['manoel', 'senha123'],
     '2': ['pedro', 'senha456'],
+}
+
+#criar tópicos de usuários
+bootstrap_servers = 'localhost:9092' 
+admin_client = AdminClient({'bootstrap.servers': bootstrap_servers})
+
+for key, values in usuarios.items():
+        nome_topico = f'{values[0]}_topic'
+
+        # Verifique se o tópico já existe (Kafka cria topicos que não existem automáticamente)
+        topic_metadata = admin_client.list_topics(topic=nome_topico)
+
+
+
+grupos = {'1': "mensagens_topic",
+          '2': 'manoel_topic',
+          '3': 'pedro_topic',
 }
 
 
@@ -23,62 +39,25 @@ id_grupo_kafka = f'teste-{str(uuid.uuid4())}'
 # Configurações do consumidor Kafka
 config_consumidor = {
     'bootstrap.servers': 'localhost:9092',  # Kafka Broker
-    'group.id': id_grupo_kafka,  # Unique Consumer Group ID for each run
-    'auto.offset.reset': 'earliest',  # Start from the beginning of the topic
+    'group.id': id_grupo_kafka,  # Id de grupo de consumidor
+    'auto.offset.reset': 'earliest',  # Comece a consumir do início do tópico
     'isolation.level': 'read_committed',
 }
 
 
-class TelaGrupo(QWidget):
+class TelaConversa(QWidget):
     def __init__(self, grupo, usuario_logado):
         super().__init__()
         self.grupo = grupo
         self.usuario_logado = usuario_logado
-        self.historico_mensagens = [] 
-
-        self.historico_mensagens = self.msgs()
 
         self.initUI()
 
-    
-    def msgs(self):
-        mensagens = []
-
-        id_grupo_kafka = f'teste-{str(uuid.uuid4())}'
-        # Configurações do consumidor Kafka
-        config_consumidor = {
-            'bootstrap.servers': 'localhost:9092',  # Kafka Broker
-            'group.id': id_grupo_kafka,  # Id de grupo do consumidor
-            'auto.offset.reset': 'earliest',  # Inicie a consumir mensagens do inicio do topico
-            'isolation.level': 'read_committed',
-        }
-
-        consumer = Consumer(config_consumidor)
-        consumer.subscribe([self.grupo])
-        try:
-            while True:
-                msg = consumer.poll(1.0)  
-
-                if msg is None:
-                    # Se não houver mais mensagens sendo consumidas, encerre o loop
-                    break
-
-                if msg.error():
-                    print(f'Erro ao buscar por mensagens: {msg.error()}')
-                else:
-                    mensagem = msg.value().decode("utf-8")
-                    mensagens.append(mensagem)
-
-        except KeyboardInterrupt:
-            pass
-        finally:
-            return mensagens
-
     def initUI(self):
         # Widgets
-        self.label_grupo = QLabel(f'Bem Vindo ao grupo {self.grupo} {self.usuario_logado}!')
+        self.label_grupo = QLabel(f'Conversa: {self.grupo}')
         self.mensagens = QLabel('Mensagens:', self)
-        self.mensagens_grupo = QLabel(self, text='\n'.join(self.historico_mensagens))
+        self.mensagens_grupo = QLabel(self, text='\n')
         self.mensagem = QLineEdit()
         self.botao_mandar = QPushButton('Enviar')
         self.botao_cancelar = QPushButton('Cancelar')
@@ -160,36 +139,48 @@ class TelaPrincipal(QWidget):
 
     def initUI(self):
         # Widgets
-        self.label_usuario = QLabel(f'Qual grupo deseja entrar?')
+        self.label_grupo = QLabel(f'Qual conversa deseja entrar?')
         self.input_grupo = QLineEdit()
-        self.botao_entrar = QPushButton('Entrar')
+        self.botao_entrar_grupo = QPushButton('Entrar na conversa')
+        self.botao_entrar_mensagens = QPushButton('Minhas mensagens')
         self.botao_cancelar = QPushButton('Cancelar')
 
         # Configurar layout
         layout = QVBoxLayout()
-        layout.addWidget(self.label_usuario)
+        layout.addWidget(self.label_grupo)
         layout.addWidget(self.input_grupo)
-        layout.addWidget(self.botao_entrar)
+        layout.addWidget(self.botao_entrar_grupo)
+        layout.addWidget(self.botao_entrar_mensagens)
         layout.addWidget(self.botao_cancelar)
         
 
         self.setLayout(layout)
 
         # Configurar eventos
-        self.botao_entrar.clicked.connect(self.entrar_grupo)
+        self.botao_entrar_grupo.clicked.connect(self.entrar_grupo)
+        self.botao_entrar_mensagens.clicked.connect(self.ver_mensagens)
         self.botao_cancelar.clicked.connect(self.close)
 
         self.setWindowTitle('Tela Principal')
         self.setGeometry(100, 100, 300, 200)
     
+    def ver_mensagens(self):
+        chave = ''
+        for key, value in grupos.items():
+            if value == f'{self.usuario_logado}_topic':
+                chave = key
+
+        self.abrir_tela_grupo(grupos[f"{chave}"])
+        
+    
     def entrar_grupo(self):
         grupo = self.input_grupo.text()
 
         self.abrir_tela_grupo(grupos[f"{grupo}"])
-
-        
+    
+  
     def abrir_tela_grupo(self, grupo):
-        self.tela_grupo = TelaGrupo(grupo, self.usuario_logado)
+        self.tela_grupo = TelaConversa(grupo, self.usuario_logado)
         self.tela_grupo.show()
         self.close()
 
@@ -236,10 +227,9 @@ class TelaLogin(QWidget):
 
             if usuario == values[0] and senha == values[1]:
                 self.usuario_logado = values[0]
-                print(f'Login bem-sucedido, seja bem vindo {self.usuario_logado}!')
                 self.abrir_tela_principal()
             else:
-                print('Login falhou')
+                pass
 
     def abrir_tela_principal(self):
         self.tela_principal = TelaPrincipal(self.usuario_logado)
